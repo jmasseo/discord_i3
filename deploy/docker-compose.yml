@@ -1,0 +1,15 @@
+# Run from the repo root:  docker compose -f deploy/docker-compose.yml up -d --build
+# (podman-compose works the same way.)
+services:
+  i3bridge:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN:?set DISCORD_TOKEN in the environment or a .env file}
+    volumes:
+      - ../config.toml:/app/config.toml:ro
+      - ../state:/app/state       # holds the router password; back this directory up
+    ports:
+      - "127.0.0.1:8080:8080"   # /health, /health/ready, /metrics

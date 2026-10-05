@@ -1,0 +1,75 @@
+# i3bridge configuration. Copy to config.toml. Secrets come from the environment:
+#   DISCORD_TOKEN   Discord bot token (required for `i3bridge run`)
+# Any key below can be overridden with I3B_<SECTION>__<KEY>, e.g. I3B_DISCORD__GUILD_ID=123.
+
+[mud]
+name = "Discord"                 # our name on the I3 network; the router binds the password to it
+admin_email = "admin@example.com"
+mudlib = "i3bridge 0.1"
+base_mudlib = "i3bridge"
+driver = "Python/asyncio"
+mud_type = "Discord"
+open_status = "open for public"
+player_port = 0                  # we have no telnet port; some mudlists display this
+tcp_port = 0
+udp_port = 0
+
+# Ordered: first entry is tried first; startup-reply may redirect us.
+[[routers]]
+name = "*dalet"
+host = "97.107.133.86"
+port = 8787
+
+[[routers]]
+name = "*i4"
+host = "204.209.44.3"
+port = 8080
+
+[i3]
+reconnect_min_seconds = 2
+reconnect_max_seconds = 300
+idle_reconnect_after_seconds = 1800   # no traffic at all for this long => reconnect
+keepalive_interval_seconds = 600      # re-affirm a channel-listen when quiet; 0 disables
+max_packet_bytes = 2097152
+outbound_encoding = "utf-8"
+
+[state]
+path = "state/bridge.db"
+
+[discord]
+guild_id = 0                     # the dedicated server
+category_name = "InterMUD-3"
+admin_role_id = 0                # 0 = the bot finds or creates admin_role_name itself
+tells_channel_id = 0             # 0 = the bot finds or creates tells_channel_name itself
+admin_role_name = "i3-admin"     # members with this role may run join/leave/link/ignore/status
+tells_channel_name = "i3-tells"  # fallback for users whose DMs are closed, and bridge notices
+auto_provision = true            # create the role/channel above when missing
+channel_prefix = "i3-"
+allow_member_join = false        # may non-admins run /i3 join?
+
+[format]
+transliterate = "text"           # outbound I3 text: "text" folds accented letters to ASCII but
+                                 # keeps emoji; "all" folds everything (emoji are lost); "none" sends UTF-8 as-is
+max_outbound_chars = 900
+multiline = "join"               # "join" lines with " / " or "split" into several packets
+color_mode = "strip"             # "strip" Pinkfish codes or render as "ansi" code blocks
+emote_from_italics = true        # a fully italic Discord message (/me) becomes channel-e
+
+[presence]
+scope = "all"                    # all | bridged | opt-in   (who is listed for rwho)
+fallback_window_seconds = 7200   # activity-based presence if the Presences intent is missing
+
+[limits]
+tells_per_minute = 10
+messages_per_user_per_minute = 30
+channel_flood_messages = 20
+channel_flood_window_seconds = 10
+
+[health]
+bind = "127.0.0.1"               # the Docker image overrides this to 0.0.0.0
+port = 8080
+
+[log]
+level = "INFO"
+json = false
+packet_debug = false             # log every raw I3 packet

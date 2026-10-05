@@ -1,0 +1,12 @@
+.venv
+.git
+state
+config.toml
+.env
+tests
+docs
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.hypothesis
+__pycache__

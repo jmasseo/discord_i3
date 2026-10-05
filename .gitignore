@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+*.egg-info/
+dist/
+build/
+state/
+*.db
+config.toml
+.env
+bot-data.md

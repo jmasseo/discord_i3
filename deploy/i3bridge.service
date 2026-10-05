@@ -1,0 +1,20 @@
+# Alternative to Docker: systemd unit. Install the package into /opt/i3bridge/.venv first.
+[Unit]
+Description=Discord <-> InterMUD-3 bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=i3bridge
+WorkingDirectory=/opt/i3bridge
+EnvironmentFile=/opt/i3bridge/.env
+Environment=I3B_CONFIG=/opt/i3bridge/config.toml
+ExecStart=/opt/i3bridge/.venv/bin/i3bridge run
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/i3bridge/state
+
+[Install]
+WantedBy=multi-user.target
