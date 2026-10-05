@@ -8,6 +8,7 @@ addressed to our users, and the user cache. Anything else gets the right ``error
 from __future__ import annotations
 
 import logging
+from collections import OrderedDict
 from collections.abc import Callable, Iterable
 
 from ...bridge.ports import ChannelEvent, Frontend, PresenceProvider, TellEvent
@@ -45,6 +46,9 @@ NOT_IMPLEMENTED = frozenset(
 )
 
 
+UCACHE_MAX = 5000
+
+
 class Dispatcher:
     """Implements :class:`i3bridge.i3.client.PacketHandler`."""
 
@@ -60,12 +64,16 @@ class Dispatcher:
         self.presence = presence
         self._ignore_patterns = ignore_patterns
         self._listened = listened
-        self.ucache: dict[tuple[str, str], tuple[str, int]] = {}
+        self.ucache: OrderedDict[tuple[str, str], tuple[str, int]] = OrderedDict()
         self.counts: dict[str, int] = {}
 
     def visname_for(self, mud: str, user: str, fallback: str) -> str:
-        entry = self.ucache.get((mud.lower(), user.lower()))
-        return entry[0] if entry and entry[0] else fallback
+        key = (mud.lower(), user.lower())
+        entry = self.ucache.get(key)
+        if entry is None:
+            return fallback
+        self.ucache.move_to_end(key)
+        return entry[0] or fallback
 
     def _ignored(self, mud: str, user: str | None) -> bool:
         from ...bridge.policy import source_matches
@@ -121,7 +129,11 @@ class Dispatcher:
                 log.warning("error from %s: %s: %s", pkt.orig_mud, err.code, err.message)
         elif t == "ucache-update":
             u = pk.parse_ucache_update(pkt)
-            self.ucache[(pkt.orig_mud.lower(), u.username.lower())] = (u.visname, u.gender)
+            key = (pkt.orig_mud.lower(), u.username.lower()[:64])
+            self.ucache[key] = (u.visname[:80], u.gender)
+            self.ucache.move_to_end(key)
+            while len(self.ucache) > UCACHE_MAX:
+                self.ucache.popitem(last=False)
         elif t in NOT_IMPLEMENTED:
             await self._reply_error(client, pkt, "not-imp", f"{t} is not supported by this mud")
         else:

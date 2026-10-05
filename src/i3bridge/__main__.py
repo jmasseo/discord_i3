@@ -29,7 +29,7 @@ def _load(args: argparse.Namespace) -> tuple[Config, StateStore]:
 async def _probe(cfg: Config, store: StateStore, dry_run: bool) -> int:
     from .i3 import packets as pk
     from .i3.client import SERVICES, I3Client
-    from .i3.lpc import encode
+    from .i3.redact import redacted_text
 
     m = cfg.mud
     router = cfg.routers[0]
@@ -43,7 +43,7 @@ async def _probe(cfg: Config, store: StateStore, dry_run: bool) -> int:
     print(f"router      : {router.name} {router.host}:{router.port}")
     print(f"mud name    : {m.name}")
     print(f"password    : {'stored' if pw else 'none yet (will request one)'}")
-    print(f"startup-req : {encode(req.to_lpc())}")
+    print(f"startup-req : {redacted_text(req.to_lpc())}")
     if dry_run:
         return 0
 

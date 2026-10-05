@@ -42,8 +42,18 @@ LOCATE_COLLECT = 3.0
 @dataclass(slots=True)
 class _Pending:
     kind: str
+    mud: str | None  # the mud we asked; None = any (locate is a broadcast)
     future: asyncio.Future[str]
     collected: list[str] = field(default_factory=list)
+
+    def accepts(self, kind: str, from_mud: str) -> bool:
+        if kind == "*":  # an error: from the mud we asked, or from a router
+            return self.mud is None or from_mud.startswith("*") or _same_mud(from_mud, self.mud)
+        return self.kind == kind and (self.mud is None or _same_mud(from_mud, self.mud))
+
+
+def _same_mud(a: str, b: str) -> bool:
+    return a.strip().lower() == b.strip().lower()
 
 
 def human_idle(seconds: int) -> str:
@@ -253,7 +263,7 @@ class Bridge:
         return await self.tells.inbound(ev)
 
     async def on_who_reply(self, to_user: str, from_mud: str, entries: list[pk.WhoEntry]) -> None:
-        await self._deliver(to_user, "who", format_who(from_mud, entries))
+        await self._deliver(to_user, "who", from_mud, format_who(from_mud, entries))
 
     async def on_finger_reply(self, to_user: str, from_mud: str, r: pk.FingerReply) -> None:
         parts = [f"**{clean_inbound(r.visname)}@{from_mud}** {clean_inbound(r.title)}"]
@@ -264,35 +274,47 @@ class Bridge:
             parts.append(f"level: {clean_inbound(r.level)}")
         if r.extra:
             parts.append(clean_inbound(r.extra))
-        await self._deliver(to_user, "finger", "\n".join(parts))
+        await self._deliver(to_user, "finger", from_mud, "\n".join(parts))
 
     async def on_locate_reply(self, to_user: str, from_mud: str, r: pk.LocateReply) -> None:
         status = f" ({clean_inbound(r.status)})" if r.status else ""
         await self._deliver(
             to_user,
             "locate",
+            from_mud,
             f"**{clean_inbound(r.located_visname)}** is on **{r.located_mud}**, "
             f"idle {human_idle(r.idle)}{status}",
         )
 
     async def on_chan_who_reply(self, to_user: str, from_mud: str, r: pk.ChanWhoReply) -> None:
         names = ", ".join(clean_inbound(u) for u in r.users) or "nobody"
-        await self._deliver(to_user, "chanwho", f"**{r.channel}** on **{from_mud}**: {names}")
+        await self._deliver(
+            to_user, "chanwho", from_mud, f"**{r.channel}** on **{from_mud}**: {names}"
+        )
 
     async def on_error(self, to_user: str, from_mud: str, err: pk.ErrorPacket) -> None:
-        await self._deliver(to_user, "*", self.tells.format_error(from_mud, err))
+        await self._deliver(to_user, "*", from_mud, self.tells.format_error(from_mud, err))
 
     # ------------------------------------------------------------- queries
 
-    async def _deliver(self, to_user: str, kind: str, text: str) -> None:
+    async def _deliver(self, to_user: str, kind: str, from_mud: str, text: str) -> None:
         waiting = self._pending.get(to_user.lower(), [])
         for p in waiting:
-            if kind == "*" or p.kind == kind:
+            if p.accepts(kind, from_mud):
                 if p.kind == "locate" and kind != "*":
                     p.collected.append(text)
                 elif not p.future.done():
                     p.future.set_result(text)
                 return
+        if waiting:
+            log.warning(
+                "ignoring %s reply from %s for %s: not what they asked", kind, from_mud, to_user
+            )
+            return
+        if kind != "*":
+            log.debug("unsolicited %s reply from %s for %s dropped", kind, from_mud, to_user)
+            return
+        # an error with no pending query usually concerns a tell; that is worth a DM
         record = self.identity.by_i3_name(to_user)
         if record is not None:
             await self.send_dm(record.discord_id, text)
@@ -301,12 +323,13 @@ class Bridge:
         self,
         record: UserRecord,
         kind: str,
+        mud: str | None,
         send: Callable[[], Awaitable[None]],
         *,
         collect: float = 0.0,
     ) -> str:
         key = record.i3_name.lower()
-        pending = _Pending(kind, asyncio.get_running_loop().create_future())
+        pending = _Pending(kind, mud, asyncio.get_running_loop().create_future())
         self._pending.setdefault(key, []).append(pending)
         try:
             try:
@@ -343,7 +366,7 @@ class Bridge:
             target = self._mud(mud)
         except ValueError as exc:
             return str(exc)
-        return await self._query(rec, "who", lambda: self.outbound.who(rec.i3_name, target))
+        return await self._query(rec, "who", target, lambda: self.outbound.who(rec.i3_name, target))
 
     async def query_finger(self, user: discord.User | discord.Member, spec: str) -> str:
         rec = self._user(user)
@@ -352,7 +375,7 @@ class Bridge:
         except ValueError as exc:
             return str(exc)
         return await self._query(
-            rec, "finger", lambda: self.outbound.finger(rec.i3_name, mud, peer)
+            rec, "finger", mud, lambda: self.outbound.finger(rec.i3_name, mud, peer)
         )
 
     async def query_locate(self, user: discord.User | discord.Member, username: str) -> str:
@@ -361,7 +384,11 @@ class Bridge:
         if not name:
             return "Give a user name."
         return await self._query(
-            rec, "locate", lambda: self.outbound.locate(rec.i3_name, name), collect=LOCATE_COLLECT
+            rec,
+            "locate",
+            None,
+            lambda: self.outbound.locate(rec.i3_name, name),
+            collect=LOCATE_COLLECT,
         )
 
     async def query_chanwho(
@@ -373,7 +400,10 @@ class Bridge:
         except ValueError as exc:
             return str(exc)
         return await self._query(
-            rec, "chanwho", lambda: self.outbound.chan_who(rec.i3_name, target, channel.strip())
+            rec,
+            "chanwho",
+            target,
+            lambda: self.outbound.chan_who(rec.i3_name, target, channel.strip()),
         )
 
     # ------------------------------------------------------------- talking
@@ -437,9 +467,15 @@ class Bridge:
             return
         if message.guild is None:
             if isinstance(message.channel, discord.DMChannel):
-                text = await self.tells.from_dm(
-                    message.author.id, message.author.display_name, message.content
-                )
+                guild = self.bot.get_guild(self.cfg.discord.guild_id)
+                member = guild.get_member(message.author.id) if guild else None
+                if member is None:
+                    log.info(
+                        "ignoring DM from %d: not a member of the bridge server", message.author.id
+                    )
+                    text = "Only members of the bridge's Discord server can use it."
+                else:
+                    text = await self.tells.from_dm(member.id, member.display_name, message.content)
                 if text:
                     with contextlib.suppress(discord.HTTPException):
                         await message.channel.send(text, allowed_mentions=NO_MENTIONS)

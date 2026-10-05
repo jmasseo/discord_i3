@@ -41,5 +41,10 @@ def setup_logging(level: str = "INFO", as_json: bool = False, packet_debug: bool
     root.addHandler(handler)
     root.setLevel(level.upper())
     logging.getLogger(PACKET_LOGGER).setLevel(logging.DEBUG if packet_debug else logging.INFO)
+    if packet_debug:
+        logging.getLogger(PACKET_LOGGER).warning(
+            "packet debug logging is ON: every I3 packet is written to the log. Router "
+            "passwords and tell bodies are redacted; channel traffic and user names are not."
+        )
     logging.getLogger("discord").setLevel(logging.WARNING)
     logging.getLogger("discord.http").setLevel(logging.WARNING)

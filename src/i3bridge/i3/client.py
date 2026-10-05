@@ -29,6 +29,7 @@ from ..state.db import StateStore
 from . import packets as pk
 from .framing import FramingError, frame, read_frame
 from .lpc import LPCError, bytes_to_text, decode, encode
+from .redact import redacted_text
 
 log = logging.getLogger(__name__)
 plog = logging.getLogger(PACKET_LOGGER)
@@ -154,7 +155,8 @@ class I3Client:
             await writer.drain()
         self.stats.packets_out += 1
         self.stats.last_tx = time.monotonic()
-        plog.debug(">> %s", text)
+        if plog.isEnabledFor(logging.DEBUG):
+            plog.debug(">> %s", redacted_text(pkt.to_lpc()))
 
     async def listen(self, channel: str, on: bool) -> None:
         if on:
@@ -344,11 +346,20 @@ class I3Client:
         self.stats.last_rx = time.monotonic()
         self.stats.packets_in += 1
         text = bytes_to_text(raw)
-        plog.debug("<< %s", text)
         try:
-            return pk.Packet.from_lpc(decode(text))
-        except (LPCError, pk.PacketError) as exc:
-            log.warning("dropping undecodable packet (%s): %.200r", exc, text)
+            value = decode(text)
+        except LPCError as exc:
+            log.warning("dropping undecodable %d-byte packet: %s", len(raw), exc)
+            return None
+        except Exception:  # a decoder bug must not take the session down
+            log.exception("decoder failed on a %d-byte packet; dropping it", len(raw))
+            return None
+        if plog.isEnabledFor(logging.DEBUG):
+            plog.debug("<< %s", redacted_text(value))
+        try:
+            return pk.Packet.from_lpc(value)
+        except pk.PacketError as exc:
+            log.warning("dropping malformed %d-byte packet: %s", len(raw), exc)
             return None
 
     async def _dispatch(self, pkt: pk.Packet) -> None:

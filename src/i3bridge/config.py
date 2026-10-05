@@ -66,6 +66,7 @@ class DiscordConfig:
     admin_role_name: str = "i3-admin"
     tells_channel_name: str = "i3-tells"
     auto_provision: bool = True
+    leave_other_guilds: bool = True  # the bot serves exactly one server
     channel_prefix: str = "i3-"
     allow_member_join: bool = False
 

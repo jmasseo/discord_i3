@@ -72,4 +72,5 @@ port = 8080
 [log]
 level = "INFO"
 json = false
-packet_debug = false             # log every raw I3 packet
+packet_debug = false             # log every I3 packet (passwords and tell bodies redacted;
+                                 # channel text and user names are not: mind your log retention)

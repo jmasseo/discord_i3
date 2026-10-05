@@ -26,14 +26,14 @@ def build_group(bridge: Bridge) -> app_commands.Group:
         name="i3",
         description="InterMUD-3 bridge",
         allowed_contexts=app_commands.AppCommandContext(
-            guild=True, dm_channel=True, private_channel=False
+            guild=True, dm_channel=False, private_channel=False
         ),
         allowed_installs=app_commands.AppInstallationType(guild=True, user=False),
     )
 
     def is_admin(interaction: discord.Interaction) -> bool:
         user = interaction.user
-        if not isinstance(user, discord.Member):
+        if interaction.guild_id != cfg.guild_id or not isinstance(user, discord.Member):
             return False
         if bridge.admin_role_id and any(r.id == bridge.admin_role_id for r in user.roles):
             return True
@@ -107,6 +107,8 @@ def build_group(bridge: Bridge) -> app_commands.Group:
     ) -> None:
         if not is_admin(interaction):
             return await deny(interaction)
+        if target.guild.id != cfg.guild_id:
+            return await reply(interaction, "That channel is not in this server.")
         await interaction.response.defer(ephemeral=True)
         try:
             lnk = await bridge.link_channel(channel, target)

@@ -26,6 +26,7 @@ type LPCValue = int | float | str | list[LPCValue] | dict[LPCKey, LPCValue] | No
 type LPCKey = int | float | str
 
 MAX_DEPTH: Final = 64
+MAX_NUMBER_CHARS: Final = 40  # longest numeric literal we accept (int64 is 20 digits)
 
 
 class LPCError(ValueError):
@@ -204,7 +205,17 @@ class _Parser:
                 pos += 1
         self.pos = pos
         literal = text[start:pos]
-        return float(literal) if is_float else int(literal)
+        if len(literal) > MAX_NUMBER_CHARS:
+            raise self.error(f"numeric literal of {len(literal)} characters is too long")
+        try:
+            if is_float:
+                value = float(literal)
+                if math.isinf(value) or math.isnan(value):
+                    raise self.error("float out of range")
+                return value
+            return int(literal)
+        except ValueError as exc:
+            raise self.error(f"malformed number {literal[:20]!r}") from exc
 
     def array(self, depth: int) -> list[LPCValue]:
         self.expect("({")

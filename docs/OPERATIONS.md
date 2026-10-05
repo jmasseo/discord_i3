@@ -11,7 +11,9 @@
 ## Logs
 
 `log.level` and `log.json` in `config.toml`. `i3bridge --packet-debug run` (or `log.packet_debug = true`)
-logs every raw I3 packet on the `i3bridge.packets` logger; useful when a router does something new.
+logs every I3 packet on the `i3bridge.packets` logger; useful when a router does something new.
+Router passwords and tell bodies are redacted in that output, but channel traffic and user
+names are not, so treat packet-debug logs as private and do not leave the mode on in production.
 
 ## State
 
@@ -32,6 +34,17 @@ mud name. `i3bridge dump-state` prints a summary.
 
 SIGTERM/SIGINT send a `shutdown` packet to the router, flush the relay and close Discord.
 Routers mark a mud down after a grace period; a quick restart is invisible to the network.
+
+## Container notes
+
+- The image runs as uid/gid 1000. If your `state/` directory is owned by another user, build
+  with `--build-arg UID=<uid> --build-arg GID=<gid>`.
+- Rootless podman maps container uid 1000 to a subordinate uid, so add `--userns=keep-id`
+  (or include `deploy/podman-compose.yml`, which sets `userns_mode: keep-id`) or the bridge
+  cannot open the database.
+- On SELinux hosts bind mounts need the `:z` label, as in the README examples.
+- `docker logs -f i3bridge` shows the bridge log; `--log-level DEBUG` can be appended to the
+  container command for a verbose run.
 
 ## Moving to another host
 
