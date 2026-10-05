@@ -34,8 +34,7 @@ export DISCORD_TOKEN=...
 .venv/bin/i3bridge run
 ```
 
-Docker: `docker compose -f deploy/docker-compose.yml up -d --build` with `DISCORD_TOKEN` in a
-`.env` file next to the compose file. The bind-mounted `state/` directory holds the router
-password: back it up.
-With podman, build with `--format docker` if you want the image's HEALTHCHECK kept; the
-`/health` endpoint works either way.
+Docker or podman: see the Deployment section of the README. The compose file and the
+`podman run` example both read `DISCORD_TOKEN` from the repo-root `.env` and bind-mount
+`config.toml` and `state/`. With podman, build with `--format docker` if you want the image's
+HEALTHCHECK kept; the `/health` endpoint works either way.

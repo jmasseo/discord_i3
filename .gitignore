@@ -8,8 +8,9 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-state/
+/state/
 *.db
 config.toml
 .env
 bot-data.md
+

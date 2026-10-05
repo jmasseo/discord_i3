@@ -1,6 +1,6 @@
 .venv
 .git
-state
+/state
 config.toml
 .env
 tests

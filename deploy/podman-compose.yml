@@ -1,0 +1,6 @@
+# Rootless podman override: map the container user onto your own uid so the bind-mounted
+# state directory is writable. Docker rejects this key, so it lives in its own file:
+#   podman-compose -f deploy/docker-compose.yml -f deploy/podman-compose.yml up -d --build
+services:
+  i3bridge:
+    userns_mode: keep-id
